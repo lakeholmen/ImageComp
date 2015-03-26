@@ -1,4 +1,4 @@
-import java.awt.image.BufferedImage
+import java.awt.image.{DataBufferByte, BufferedImage}
 import java.io.{FileInputStream, ByteArrayInputStream}
 import javax.imageio.ImageIO
 
@@ -48,32 +48,74 @@ class ImageProcessor extends Worker {
   }
 
   def min(i1:Int,i2:Int):Int = { if (i1>i2) i2 else i1}
-  def getFragment(image: BufferedImage, x: Int, y: Int, w: Int, h: Int, stride:Int): Fragment =
+  def toUnsigned(i:Byte):Int = { if (i>=0) i else 256+i}
+  def getFragment(image: BufferedImage, rgb:Array[Byte],x: Int, y: Int, w: Int, h: Int, stride:Int): Fragment =
   {
+     val rfreq = new Array[Int](256)
+     val gfreq = new Array[Int](256)
+     val bfreq = new Array[Int](256)
      var totR = 0.0
      var totG = 0.0
      var totB = 0.0
+     val rowF = 1.0/w
+     val totF = 1.0/h
+     var offset = stride*y+x
+     for (i <- 1 to w)
+     {
+       var rowR = 0.0
+       var rowG = 0.0
+       var rowB = 0.0
+       var offs = offset
+       for (j <- 1 to h)
+       {
+         val r=  toUnsigned(rgb(2+offs))
+         val g = toUnsigned(rgb(1+offs))
+         val b = toUnsigned(rgb(offs))
+         rfreq(r)+=1
+         gfreq(g)+=1
+         bfreq(b)+=1
+         rowR += r*rowF
+         rowG += g*rowF
+         rowB += b*rowF
+         //println(s"$i,$j: $r $g $b -> $rowR $rowG $rowB")
+         offs += 3
+       }
+       totR += rowR * totF
+       totG += rowG * totF
+       totB += rowB * totF
+       offset += stride
+     }
+    var avgxfreq = (w * h) / 256.0;
+    var maxrfreq = rfreq.max
+    var maxgfreq = gfreq.max
+    var maxbfreq = bfreq.max
 
-     new Fragment(totR,totG,totB,w,h,x,y)
+    new Fragment(maxrfreq/avgxfreq, maxgfreq/avgxfreq, maxbfreq/avgxfreq, totR,totG,totB,w,h,x,y)
   }
-
 
   def getFragments(image:BufferedImage):Seq[Fragment] =
   {
      var wd = image.getWidth
      var hg = image.getHeight
+     var rgb = image.getRaster().getDataBuffer().asInstanceOf[DataBufferByte].getData
+     var res:Seq[Fragment]= null
      if (wd>hg)
      {
-       val r = 0 to (wd-1)/hg+1
-       r.map(i=>getFragment(image,min(i*hg,wd-hg),0,hg,hg,wd)).distinct
+       val r = 0 to wd/hg
+       res = r.map(i=>getFragment(image,rgb,min(i*hg,wd-hg),0,hg,hg,3*wd))
      }
      else
      {
-       val r = 0 to (hg-1)/wd+1
-       r.map(i=>getFragment(image,0,min(i*wd,hg-wd),wd,wd,wd)).distinct
+       val r = 0 to hg/wd
+       res = r.map(i=>getFragment(image,rgb,0,min(i*wd,hg-wd),wd,wd,3*wd))
      }
+    res.distinct.filter(x=> x.relGFreq + x.relRFreq + x.relBFreq < 100 && x.width >= 30 && x.height >= 30)
+  }
 
 
+  def addFragment(frag: Fragment, bObject: DBObject): Unit =
+  {
+      println(frag)
   }
 
 
@@ -84,14 +126,15 @@ class ImageProcessor extends Worker {
         next = None
         val bytes = s.get("res").asInstanceOf[Array[Byte]]
         val url = s.get("url").asInstanceOf[String]
-        var status = "error"
         var upd:DBObject = null
         try
         {
           var is = new ByteArrayInputStream(bytes)
           try
           {
-            getFragments(ImageIO.read(is))
+            var f = getFragments(ImageIO.read(is))
+            upd = $set("status"->"processed")
+            f.foreach(x=>addFragment(x,s))
           }
           finally
           {
@@ -101,10 +144,10 @@ class ImageProcessor extends Worker {
         catch {
           case e: Throwable =>
             println(e.getMessage)
-            upd = $set("status"->status)
+            upd = $set("status"->"error")
 
         }
-        //coll.update(s, upd)
+        coll.update(s, upd)
 
 
     }
