@@ -9,7 +9,7 @@ class PageProcessor extends Worker {
   val coll = db("urls")
   var next: Option[DBObject] = None
 
-  lazy val dnloader = new Downloader()
+  lazy val dnloader = new Downloader(null)
   def downloadedCount():Int =
   {
     val all = coll.find(MongoDBObject("status"->"downloaded","type"->"page"))

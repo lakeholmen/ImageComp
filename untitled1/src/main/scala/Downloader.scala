@@ -9,7 +9,8 @@ import sun.misc.IOUtils
 /**
  * Created by ivizvary on 2015-03-23.
  */
-class Downloader extends Worker {
+
+class Downloader(val restype:String) extends Worker {
 
   val coll = db("urls")
   var next: Option[DBObject] = None
@@ -28,7 +29,7 @@ class Downloader extends Worker {
 
   def queuedCount():Int =
   {
-    val all = coll.find(MongoDBObject("status"->"queued"))
+    val all = coll.find(MongoDBObject("status"->"queued","type"->restype))
     all.count()
   }
 
@@ -43,7 +44,7 @@ class Downloader extends Worker {
       case Some(s) => true
       case None =>
       {
-        next = coll.find(MongoDBObject("status"->"queued")).find(x=>true) // jak to zrobić prosciej
+        next = coll.find(MongoDBObject("status"->"queued","type"->restype)).find(x=>true) // jak to zrobić prosciej
         next match {
           case Some(s) => true
           case None => false
@@ -64,7 +65,7 @@ class Downloader extends Worker {
         var str:InputStream= null
         try {
           val url = new URL(su.asInstanceOf[String])
-          println("downloading "+url)
+          println(s"downloading $restype from $url")
           try {
             str = url.openStream()
             bytes = IOUtils.readFully(str, -1, true)

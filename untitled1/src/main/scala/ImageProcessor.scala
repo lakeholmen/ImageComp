@@ -1,5 +1,5 @@
-import java.awt.image.{DataBufferByte, BufferedImage}
-import java.io.{FileInputStream, ByteArrayInputStream}
+import java.awt.image.{BufferedImage, DataBufferByte}
+import java.io.{ByteArrayInputStream, FileInputStream}
 import javax.imageio.ImageIO
 
 import com.mongodb.DBObject
@@ -12,9 +12,8 @@ import com.mongodb.casbah.query.Imports._
 class ImageProcessor extends Worker {
 
   val coll = db("urls")
+  val fragsColl = db("frags")
   var next: Option[DBObject] = None
-
-  lazy val dnloader = new Downloader()
 
   def downloadedCount(): Int = {
     val all = coll.find(MongoDBObject("status" -> "downloaded", "type" -> "image"))
@@ -113,9 +112,18 @@ class ImageProcessor extends Worker {
   }
 
 
-  def addFragment(frag: Fragment, bObject: DBObject): Unit =
+  def addFragment(f:Fragment,url:String):Unit =
   {
-      println(frag)
+     var builder = MongoDBObject.newBuilder
+     builder += "url" -> url
+     builder += "l"->f.left
+     builder += "t"->f.top
+     builder += "w"->f.width
+     builder += "h"->f.height
+     builder += "r"->f.totB
+     builder += "g"->f.totG
+     builder += "b"->f.totB
+     fragsColl.insert (builder.result())
   }
 
 
@@ -133,8 +141,12 @@ class ImageProcessor extends Worker {
           try
           {
             var f = getFragments(ImageIO.read(is))
-            upd = $set("status"->"processed")
-            f.foreach(x=>addFragment(x,s))
+            if (f.isEmpty)
+              upd = $set("status"->"empty")
+            else {
+              upd = $set("status" -> "processed")
+              f.map(fr=>addFragment(fr,url))
+            }
           }
           finally
           {
