@@ -1,10 +1,11 @@
-import java.net.URL
+import java.awt.image.BufferedImage
+import java.io.{FileInputStream, ByteArrayInputStream}
+import javax.imageio.ImageIO
 
 import com.mongodb.DBObject
-import com.mongodb.casbah.Imports._
 import com.mongodb.casbah.commons.MongoDBObject
-import sun.misc.IOUtils
-import scala.util.matching.Regex
+import com.mongodb.casbah.query.Imports._
+
 /**
  * Created by ivizvary on 2015-03-23.
  */
@@ -14,10 +15,21 @@ class ImageProcessor extends Worker {
   var next: Option[DBObject] = None
 
   lazy val dnloader = new Downloader()
-  def downloadedCount():Int =
-  {
-    val all = coll.find(MongoDBObject("status"->"downloaded","type"->"image"))
+
+  def downloadedCount(): Int = {
+    val all = coll.find(MongoDBObject("status" -> "downloaded", "type" -> "image"))
     all.count()
+  }
+
+  def Test(filepath: String): Unit =
+  {
+    var str = new FileInputStream(filepath)
+    var image = ImageIO.read(str)
+    var frags = getFragments(image)
+    for (f<-frags)
+    {
+      println(f)
+    }
   }
 
   def hasWork:Boolean =
@@ -35,68 +47,66 @@ class ImageProcessor extends Worker {
     }
   }
 
-  val reRelativeLink = "^\\/[^#]+$".r
-  val reAbsoluteLink = "^\\/\\/[^#]+$".r
-  val reExtractBase = "(http:\\/\\/[^\\/]+)\\/".r
-
-  def addUrl(url: String, baseUrl:String, resType:String):Unit =
+  def min(i1:Int,i2:Int):Int = { if (i1>i2) i2 else i1}
+  def getFragment(image: BufferedImage, x: Int, y: Int, w: Int, h: Int, stride:Int): Fragment =
   {
-    reAbsoluteLink.findFirstMatchIn(url) match
-    {
-      case Some(s)=>
-        dnloader.add("http:"+url,resType)
-      case None =>
-      {
-        reRelativeLink.findFirstMatchIn(url) match
-        {
-          case Some(s)=>
-            dnloader.add(baseUrl+url,resType)
-          case None =>
-          {
-a
-          }
-        }
+     var totR = 0.0
+     var totG = 0.0
+     var totB = 0.0
 
-      }
-    }
+     new Fragment(totR,totG,totB,w,h,x,y)
   }
 
 
-  def doWorkPiece: Unit = {
+  def getFragments(image:BufferedImage):Seq[Fragment] =
+  {
+     var wd = image.getWidth
+     var hg = image.getHeight
+     if (wd>hg)
+     {
+       val r = 0 to (wd-1)/hg+1
+       r.map(i=>getFragment(image,min(i*hg,wd-hg),0,hg,hg,wd)).distinct
+     }
+     else
+     {
+       val r = 0 to (hg-1)/wd+1
+       r.map(i=>getFragment(image,0,min(i*wd,hg-wd),wd,wd,wd)).distinct
+     }
+
+
+  }
+
+
+  def doWorkPiece(): Unit = {
     next match {
-      case None => return
+      case None =>
       case Some(s)=>
-      {
         next = None
         val bytes = s.get("res").asInstanceOf[Array[Byte]]
         val url = s.get("url").asInstanceOf[String]
         var status = "error"
-        var b = reExtractBase.findFirstMatchIn(url)
-        b match
+        var upd:DBObject = null
+        try
         {
-          case None=>{}
-          case Some(baseMatch)=>
+          var is = new ByteArrayInputStream(bytes)
+          try
           {
-            var base = b.get.group(1)
-            status = "processed"
-            val str= new String(bytes,"UTF-8")
-            val ExtractUrl = "<a[^>]*?href\\s*=\\s*[\"\"']?([^'\"\" >]+?)[ '\"\"][^>]*?>".r
-            val links = ExtractUrl.findAllMatchIn(str).toList
-            for(l<- links)
-            {
-              addUrl(l.group(1),base,"page")
-            }
-            val ExtractImg = "<img[^>]*?src\\s*=\\s*[\"\"']?([^'\"\" >]+?)[ '\"\"][^>]*?>".r
-            val images = ExtractImg.findAllMatchIn(str).toList
-            for(l<- images)
-            {
-              addUrl(l.group(1),base,"image")
-            }
+            getFragments(ImageIO.read(is))
+          }
+          finally
+          {
+            if (is!=null) is.close()
           }
         }
-        var upd = $set("status"->status)
-        coll.update(s, upd)
-      }
+        catch {
+          case e: Throwable =>
+            println(e.getMessage)
+            upd = $set("status"->status)
+
+        }
+        //coll.update(s, upd)
+
+
     }
   }
 

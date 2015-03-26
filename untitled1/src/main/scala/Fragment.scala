@@ -3,6 +3,12 @@
  */
 class Fragment(val totR:Double,val totG:Double,val totB:Double,val width:Int,val height:Int,val left:Int,val top:Int) {
 
+  override def toString():String =
+  {
+     s"$totR,$totG,$totB  ($left,$top) ($width,$height)"
+  }
+
+
    override def hashCode():Int =
    {
       left+100*top+width+1000*height

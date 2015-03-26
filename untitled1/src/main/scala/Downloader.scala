@@ -2,9 +2,8 @@ import java.io.InputStream
 import java.net.URL
 
 import com.mongodb.DBObject
-import com.mongodb.casbah.{MongoCollection, MongoClient}
-import com.mongodb.casbah.commons.MongoDBObject
 import com.mongodb.casbah.Imports._
+import com.mongodb.casbah.commons.MongoDBObject
 import sun.misc.IOUtils
 
 /**
@@ -55,7 +54,7 @@ class Downloader extends Worker {
 
   def doWorkPiece: Unit = {
     next match {
-      case None => return
+      case None =>
       case Some(s)=>
       {
         next = None

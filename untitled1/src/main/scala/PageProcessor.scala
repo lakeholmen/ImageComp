@@ -1,10 +1,6 @@
-import java.net.URL
-
 import com.mongodb.DBObject
 import com.mongodb.casbah.Imports._
 import com.mongodb.casbah.commons.MongoDBObject
-import sun.misc.IOUtils
-import scala.util.matching.Regex
 /**
  * Created by ivizvary on 2015-03-23.
  */
@@ -64,7 +60,7 @@ class PageProcessor extends Worker {
 
   def doWorkPiece: Unit = {
     next match {
-      case None => return
+      case None =>
       case Some(s)=>
       {
         next = None
