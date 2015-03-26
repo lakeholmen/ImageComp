@@ -53,7 +53,7 @@ class ImageProcessor extends Worker {
             dnloader.add(baseUrl+url,resType)
           case None =>
           {
-
+a
           }
         }
 
