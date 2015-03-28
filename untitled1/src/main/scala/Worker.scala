@@ -39,6 +39,7 @@ trait Worker extends Runnable{
      {
         if (hasWork) {
           doWorkPiece
+          Thread.sleep(10)
         }
         else{
           waitForWork

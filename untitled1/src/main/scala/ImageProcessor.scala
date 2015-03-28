@@ -10,6 +10,25 @@ import com.mongodb.casbah.query.Imports._
  * Created by ivizvary on 2015-03-23.
  */
 class ImageProcessor extends Worker {
+  def getReport(): String =
+  {
+    val downloaded = coll.find(MongoDBObject("status" -> "downloaded", "type" -> "image"))
+    val processed = coll.find(MongoDBObject("status" -> "processed", "type" -> "image"))
+    val empty = coll.find(MongoDBObject("status" -> "empty", "type" -> "image"))
+    val queued = coll.find(MongoDBObject("status" -> "queued", "type" -> "image"))
+    val error = coll.find(MongoDBObject("status" -> "error", "type" -> "image"))
+    val all = coll.find(MongoDBObject("type" -> "image"))
+    s"""total: ${all.count()}
+queued: ${queued.count()}
+downloaded: ${downloaded.count()}
+empty: ${empty.count()}
+error: ${error.count()}
+        processed: ${processed.count()}
+     """.stripMargin
+  }
+
+
+
 
   val coll = db("urls")
   val fragsColl = db("frags")
@@ -48,6 +67,7 @@ class ImageProcessor extends Worker {
 
   def min(i1:Int,i2:Int):Int = { if (i1>i2) i2 else i1}
   def toUnsigned(i:Byte):Int = { if (i>=0) i else 256+i}
+
   def getFragment(image: BufferedImage, rgb:Array[Byte],x: Int, y: Int, w: Int, h: Int, stride:Int): Fragment =
   {
      val rfreq = new Array[Int](256)
@@ -120,7 +140,7 @@ class ImageProcessor extends Worker {
      builder += "t"->f.top
      builder += "w"->f.width
      builder += "h"->f.height
-     builder += "r"->f.totB
+     builder += "r"->f.totR
      builder += "g"->f.totG
      builder += "b"->f.totB
      fragsColl.insert (builder.result())
@@ -134,6 +154,7 @@ class ImageProcessor extends Worker {
         next = None
         val bytes = s.get("res").asInstanceOf[Array[Byte]]
         val url = s.get("url").asInstanceOf[String]
+        println(s"processing $url")
         var upd:DBObject = null
         try
         {

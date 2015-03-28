@@ -53,39 +53,47 @@ class Downloader(val restype:String) extends Worker {
     }
   }
 
+  val reExtractBase = "(http:\\/\\/[^\\/]+)\\/".r
+  val allowed = Set("upload.wikimedia.org","commons.wikimedia.org",".wikipedia.org")
+  val forbidden = Set("/math/","/wiki/Commons","/wiki/User:","/wiki/Main_Page", "/wiki/Portal:", "/wiki/Wikipedia:", "/wiki/Special:", "/wiki/Help:", "/wiki/Talk:", "/wiki/Category:Valued_image", "/wiki/Commons:Valued_image")
   def doWorkPiece: Unit = {
     next match {
       case None =>
-      case Some(s)=>
-      {
+      case Some(s) => {
         next = None
         val su = s.get("url")
         var status = "downloaded"
-        var bytes:Array[Byte] = null
-        var str:InputStream= null
-        try {
-          val url = new URL(su.asInstanceOf[String])
-          println(s"downloading $restype from $url")
+        var bytes: Array[Byte] = null
+        var str: InputStream = null
+        val url = new URL(su.asInstanceOf[String])
+        if ((allowed.contains(url.getHost) || (allowed.exists(p=>url.getHost().endsWith(p)))) && !forbidden.exists(p=>url.getPath().startsWith(p))) {
           try {
-            str = url.openStream()
-            bytes = IOUtils.readFully(str, -1, true)
+            println(s"downloading $restype from $url")
+            try {
+              str = url.openStream()
+              bytes = IOUtils.readFully(str, -1, true)
+              if (bytes.length > 1000000) {
+                bytes = null;
+                status = "too-large"
+              }
+            }
+            finally {
+              if (str != null) str.close()
+            }
           }
-          finally {
-            if (str!=null) str.close()
+          catch {
+            case ex: Throwable => {
+              status = "error"
+              println("error")
+            }
           }
         }
-        catch
-        {
-          case ex :Throwable =>
-          {
-            status = "error"
-            println("error")
-          }
+        else {
+          status = "not-allowed"
         }
-        var upd = $set("status"->status,"res"->bytes)
+        var upd = $set("status" -> status, "res" -> bytes)
         coll.update(s, upd)
       }
     }
   }
-
 }
